@@ -20,7 +20,9 @@ QChat leverages event invokation to broadcast realtime messages across the chann
   
 ## Syntax
   
-  As with most chat clients, type your message and press enter. Commands can be implemented by started the statement with a "\". For example, to exit the chat client type `\q`. The entry is processed as a command on the client. Future commands in progress include:
+  As with most chat clients, type your message and press enter. Commands can be implemented by started the statement with a "\". For example, to exit the chat client type `\q`. The entry is processed as a command on the client. 
+  
+  Future commands in progress include:
   * `\p` - List all participants
   * `\c` - List channel details such as message statistics, time channel has been opened, users on the channel
   * `\m <query> [yes|no]` - Run a MAR query and choose whether or not to submit the results to the chat.
