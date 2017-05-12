@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 import time
+import math
+import hashlib
 from datetime import datetime
 from threading import Condition
 import json
@@ -20,6 +22,7 @@ from dxlclient.message import Event
 
 from string import printable
 from curses import erasechar, wrapper
+from appJar import gui
 
 # Import common logging and configuration
 # Assume the common.py is in the CWD. Otherwise you'll need to add its location to the path
@@ -27,10 +30,8 @@ from curses import erasechar, wrapper
 from common import *
 
 # Configure local logger
-logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
-
-
 
 # Condition/lock used to protect changes to counter
 event_count_condition = Condition()
@@ -42,121 +43,306 @@ event_count = [0]
 config = DxlClientConfig.create_dxl_config_from_file(CONFIG_FILE)
 
 
+# Set some globals
+global username
+global channel
+global eventTopic
+global UID
+global joinTime
+global currentUsers
+global chatWin
 
-PRINTABLE = map(ord, printable)
-USERNAME = str(raw_input("Username? "))
-CHANNEL = str(raw_input("Channel? "))
-PROMPT = "{0}@{1} >>>".format(USERNAME,CHANNEL)
+# Login
+def btnLogin(btn):
+    global username
+    global channel
 
-# The topic to publish to
-EVENT_TOPIC = "/mcafee/event/qchat/{0}".format(CHANNEL)
+    if btn=="Cancel":
+        exit()
+    else:
+        username = str(loginApp.getEntry('user'))
+        channel = str(loginApp.getEntry('channel'))
+        # Here we can create and launch the subWindows
+        loginApp.stop()
 
-def input(stdscr):
-    ERASE = input.ERASE = getattr(input, "ERASE", ord(erasechar()))
-    #Known backspace in Linux
-    ERASE = 263
-
-    Y, X = stdscr.getyx()
-    s = []
-
-    while True:
-        c = stdscr.getch()
-
-        if c in (13, 10):
-            break
-        elif c == ERASE:
-            y, x = stdscr.getyx()
-            if x > X:
-                del s[-1]
-                stdscr.move(y, (x - 1))
-                stdscr.clrtoeol()
-                stdscr.refresh()
-        elif c in PRINTABLE:
-            s.append(chr(c))
-            stdscr.addch(c)
-
-    return "".join(s)
-
-def prompt(stdscr, y, x, prompt=">>> "):
-    stdscr.move(y, x)
-    stdscr.clrtoeol()
-    stdscr.addstr(y, x, prompt)
-    return input(stdscr)
-
-def main(stdscr):
-    Y, X = stdscr.getmaxyx()
-
-    lines = []
-    max_lines = (Y - 3)
-
-    stdscr.clear()
-    with DxlClient(config) as client:
-
-        # Connect to the fabric
-        client.connect()
+def btnSendMessage(btn):
+    logger.info("Button Pressed")
+    sendMessage()
     
-        #
-        # Register callback and subscribe
-        #
+def listUsers(currentUsers):
+    results = []
+    for user in currentUsers:
+        results.append(currentUsers[user]['username'])
 
-        # Create and add event listener
-        class MyEventCallback(EventCallback):
-            def on_event(self, event):
-                with event_count_condition:
-                    message_dict=json.loads(event.payload.decode())
-                    if message_dict['type'] ==1:
-                        strTime = time.strftime("%H:%m:%S",time.localtime(int(message_dict['time'])))
-                        strUsername = message_dict['user']
-                        strMessage = "{0} {1}: {2}".format(strTime, strUsername, message_dict['message'])
+    return results
+
+def rptTimeoutUsers():
+    timeoutUsers()
+
+def timeoutUsers():
+    global currentUsers
+
+    # Temp list of users who have NOT timed out
+    refreshUsers={}
+    for user in currentUsers:
+        logger.info( "Time {0} and last ping {1}".format(str(int(time.time())), currentUsers[user]['lastping']))
+
+        if int(time.time()) - int(currentUsers[user]['lastping']) < 300:
+            refreshUsers[user]=currentUsers[user]
+    
+    currentUsers=refreshUsers
+    usernames = listUsers(currentUsers)
+    chatWin.updateListItems("listUsers",usernames)
+
+def sendPingRequest():
+    sendMessage(3)
+
+def sendPing():
+    sendMessage(2)
+
+def sendMessage(msgType=1):
+    # Record the start time
+    start = int(time.time())
+    # Create the event
+    event = Event(eventTopic)
+
+    if msgType == 1:
+        # Set the payload
+        event_dict={}
+        #event type 1 is a standard chat message
+        event_dict['type'] = 1
+        event_dict['message'] = chatWin.getEntry("qcMessage")
+        event_dict['time'] = str(int(time.time()))
+        event_dict['user'] = username
+        event_dict['UID'] = UID
+    
+    elif msgType ==2:
+        logger.info("Sending Ping")
+        # set the payload
+        event_dict={}
+        #event type 2 is a user notification message
+        event_dict['type']=2
+        event_dict['time'] = str(int(time.time()))
+        event_dict['user'] = username
+        event_dict['UID'] = UID
+
+    elif msgType ==3:
+        logger.info("Sending Ping Request")
+        # set the payload
+        event_dict={}
+        #event type 3 is a broadcast ping request
+        event_dict['type']=3
+
+    elif msgType ==4:
+        logger.info("Sending bye")
+        # set the payload
+        event_dict={}
+        #event type 4 is a user GoodBye message
+        event_dict['type']=4
+        event_dict['time'] = str(int(time.time()))
+        event_dict['user'] = username
+        event_dict['UID'] = UID
+
+   
+    event.payload = json.dumps(event_dict).encode()
+    
+    
+    # Send the event
+    client.send_event(event)
+    
+    #cleanup the form
+    chatWin.clearEntry("qcMessage")
+    
+
+def launch(win):
+    loginApp.showSubWindow(win)
+
+def menuPress(menuItem):
+    if menuItem == "Exit":
+        exit()
+
+def checkStop():
+    # Let everyone know you are leaving.
+    sendMessage(4)
+    
+    return True
+
+
+
+loginApp=gui("QChat for OpenDXL")
+
+menus = ["-", "Exit"]
+loginApp.addMenuList("File", menus, menuPress)
+
+# Setup the login screen
+loginApp.addLabel("title", "Welcome to QChat", 0, 0, 2)
+loginApp.addLabel("user", "Username:", 1, 0)
+loginApp.addEntry("user", 1, 1)
+loginApp.addLabel("channel", "Channel:", 2, 0)
+loginApp.addEntry("channel", 2, 1)
+loginApp.addButtons(["Submit", "Cancel"], btnLogin, 3, 0, 2)
+loginApp.setEntryFocus("user")
+loginApp.enableEnter(btnLogin)
+
+loginApp.go("winLogin")
+
+UID = hashlib.md5(username+str(time.time())).hexdigest()
+
+logger.info("UID: {0}".format(UID))
+
+chatWin=gui("QChat for OpenDXL","940x596")
+menus = ["-", "Exit"]
+chatWin.addMenuList("File", menus, menuPress)
+
+# Setup the chat screen
+chatWin.setPadding([0,0])
+chatWin.setInPadding([0,0])
+
+# Setup DXL connectivity for chat
+eventTopic = "/mcafee/event/qchat/{0}".format(channel)
+logger.info( "Setting event topic")
+
+with DxlClient(config) as client:
+# Connect to the fabric
+    logger.info( "Connecting to DXL fabric")
+    client.connect()
+    
+    #
+    # Register callback and subscribe
+    #
+
+    # Create and add event listener
+    logger.info( "Setting up MyEventCallback class")
+    class MyEventCallback(EventCallback):
+        def on_event(self, event):
+            with event_count_condition:
+                global currentUsers
+                message_dict=json.loads(event.payload.decode())
+                # message types tell us how to process the event for chat
+                # 1: standard message delivery
+                # 2: current user stat (username, onchannel since, etc)
+                # 3: Ping request
+                # 4: BYE - A user has left the channel
+                if message_dict['type'] ==1:
+                    logger.info("Received message")
+                    strTime = time.strftime("%H:%m:%S",time.localtime(int(message_dict['time'])))
+                    strUsername = message_dict['user']
+                    strMessage = "{0} {1}: {2}".format(strTime, strUsername, message_dict['message'])
+                    strUID = message_dict['UID']
                         
                     # Print the payload for the received event
-                    stdscr.addstr(len(lines), 0, strMessage)
-                    lines.append(strMessage)
-                    stdscr.move(Y-1, len(PROMPT))
-                
-                    stdscr.refresh()
-                    # Increment the count
-                    event_count[0] += 1
-                    # Notify that the count was increment
-                    event_count_condition.notify_all()
+                    newConv = chatWin.getTextArea("txtConv")+"\n"+strMessage 
+                    chatWin.enableTextArea("txtConv")
+                    chatWin.clearTextArea("txtConv")
+                    chatWin.setTextArea("txtConv",newConv)
+                    chatWin.disableTextArea("txtConv")
+                    chatWin.getTextAreaWidget("txtConv").see("end")
+                    newConv = None
+                    
+                    # anytime we get information from the dxl, update the user list
 
-        # Register the callback with the client
-        client.add_event_callback(EVENT_TOPIC, MyEventCallback())
+                    # if the user does not yet exist, add her to the currentUsers
+                    if currentUsers.get(strUID) == None:
+                        currentUsers[strUID] = {}
 
-        # Record the start time
-        start = time.time()
+                    currentUsers[strUID]['username']=strUsername
+                    currentUsers[strUID]['onsince']=strTime
+                    currentUsers[strUID]['lastping']=str(int(time.time()))
 
-        # Create the event
-        event = Event(EVENT_TOPIC)
-        # Set the payload
-        
-        while True:
-            currentMessage = prompt(stdscr, (Y - 1), 0, PROMPT)  # noqa
-            #print "HERE"
-            if currentMessage == "\q":
-                break
+                    usernames = listUsers(currentUsers)
+                    chatWin.updateListItems("listUsers",usernames)
+
+                elif message_dict['type']==2:
+                    # Do stuff with the user information
+                    logger.info( "Received user information")
+                    strTime = message_dict['time']
+                    strUsername = message_dict['user']
+                    strUID = message_dict['UID']
+                    # if the user does not yet exist, add her to the currentUsers
+                    if currentUsers.get(strUID) == None:
+                        currentUsers[strUID] = {}
+
+                    currentUsers[strUID]['username']=strUsername
+                    currentUsers[strUID]['onsince']=strTime
+                    currentUsers[strUID]['lastping']=str(int(time.time()))
+
+                    usernames = listUsers(currentUsers)
+                    chatWin.updateListItems("listUsers",usernames)
+
+                elif message_dict['type']==3:
+                    #Type 3 is a ping request. Everyone must reply with a ping
+                    #This is compulsary
+                    sendPing()
+
+                elif message_dict['type']==4:
+                    #Type 4 is a goodbye message. Someone told us he's leaving
+                    #In order to purge him, set his last ping time to 0 and 
+                    #rebuild the list
+                    strUID = message_dict['UID']
+
+                    if currentUsers.get(strUID) == None:
+                        currentUsers[strUID] = {}
+
+                    currentUsers[strUID]['lastping']=0
+                    
+                    rptTimeoutUsers()
+
+
+
+                # Increment the count
+                event_count[0] += 1
+                # Notify that the count was increment
+                event_count_condition.notify_all()
+
+    # Register the callback with the client
+    logger.info( "Adding event callback to the class instance")
+    client.add_event_callback(eventTopic, MyEventCallback())
+ 
+    #Start building the UI
+    Conversation="{0}, welcome to QChat channel {1}.".format(username,channel)
     
-            # scroll
-            if len(lines) > max_lines:
-                lines = lines[1:]
-                stdscr.clear()
-                for i, line in enumerate(lines):
-                    stdscr.addstr(i, 0, line)
 
-            event_dict={}
-            #event type 1 is a standard chat message
-            event_dict['type'] = 1
-            event_dict['message'] = currentMessage
-            event_dict['time'] = time.time()
-            event_dict['user'] = USERNAME
-
-            event.payload = json.dumps(event_dict).encode()
-
-
-            # Send the event
-            client.send_event(event)
+    # Conversation window
+    chatWin.addLabel("l1","Conversation: {0}@{1}".format(username,channel))
+    chatWin.addScrolledTextArea("txtConv",1,0,8,4)
+    chatWin.setTextAreaWidth("txtConv",80)
+    chatWin.setTextAreaHeight("txtConv",25)
+    chatWin.setTextArea("txtConv", Conversation)
+    chatWin.disableTextArea("txtConv")
+    chatWin.getTextAreaWidget("txtConv").see("end")
     
+    
+    currentUsers = {}
+    currentUsers[UID] = {}
+    currentUsers[UID]['username']=username
+    currentUsers[UID]['onsince']=str(int(time.time()))
+    currentUsers[UID]['lastping']=str(int(time.time()))
 
-#Execute main function
-wrapper(main)
+    usernames = listUsers(currentUsers)
 
+    # Users window
+    chatWin.addLabel("l2", "Users",0,8)
+    chatWin.addListBox("listUsers",usernames,1,8,0,5)
+    
+    
+    # Input Window
+    chatWin.addEntry("qcMessage",6,0,8)
+    chatWin.setEntryDefault("qcMessage", "QChat Message")
+    chatWin.addButton("Send", btnSendMessage, 6, 8)
+    chatWin.enableEnter(btnSendMessage)
+    
+    
+    # Repeating events
+    chatWin.registerEvent(rptTimeoutUsers)
+    chatWin.setPollTime(60000)
+    chatWin.registerEvent(sendPing)
+    chatWin.setPollTime(60000)
+    
+    #Entry Calls
+    sendPingRequest()
+    chatWin.setEntryFocus("qcMessage")
+
+    #Exit Calls
+    chatWin.setStopFunction(checkStop)
+
+    chatWin.go("chatWin")
