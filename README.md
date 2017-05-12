@@ -5,8 +5,8 @@ QChat (Quick Chat) is a chat room service leveraging the OpenDXL event invokatio
 
 QChat leverages event invokation to broadcast realtime messages across the channel utilizing DXL's message topics. Authentication can be controlled through topic authorization, or left open for discretionary access to the channel. Topics are dynamically generated when the first participant enters the channel. Each subsequent participant will sit on that topic. Some benefits include but are not limited to: ephemeral, moderator free, encrypted, high speed and always connected, infrastructure free, and already integrated into existing connected platform for quick actions during high-stress incident response activities.
 
-![Login](http://imgur.com/nThJP92 "Login Screen")
-![Chat](http://imgur.com/wOXHDCz "Chat Window")
+![Login](http://i.imgur.com/nThJP92.png "Login Screen")
+![Chat](http://i.imgur.com/DOBO3Nm.png "Chat Window")
 
 
 ## Startup
