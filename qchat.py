@@ -20,8 +20,6 @@ from dxlclient.client import DxlClient
 from dxlclient.client_config import DxlClientConfig
 from dxlclient.message import Event
 
-from string import printable
-from curses import erasechar, wrapper
 from appJar import gui
 
 # Import common logging and configuration
@@ -115,6 +113,9 @@ def sendMessage(msgType=1):
         event_dict['time'] = str(int(time.time()))
         event_dict['user'] = username
         event_dict['UID'] = UID
+
+        #cleanup the form
+        chatWin.clearEntry("qcMessage")
     
     elif msgType ==2:
         logger.info("Sending Ping")
@@ -150,8 +151,6 @@ def sendMessage(msgType=1):
     # Send the event
     client.send_event(event)
     
-    #cleanup the form
-    chatWin.clearEntry("qcMessage")
     
 
 def launch(win):
