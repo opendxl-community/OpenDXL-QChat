@@ -1,5 +1,5 @@
 # OpenDXL-QChat
-QChat (Quick Chat) is a chat room service for Linux Desktop systems leveraging the OpenDXL event invokation capabilities to create small, light-weight, and interactive chat rooms for use by incident responders and SOC personnel.
+QChat (Quick Chat) is a chat room service leveraging the OpenDXL event invokation capabilities to create small, light-weight, and interactive chat rooms for use by incident responders and SOC personnel.
 
 ## Introduction
 
@@ -17,9 +17,6 @@ QChat leverages event invokation to broadcast realtime messages across the chann
 
   Once DXL fabric connection is established, the participant listens for any incoming events on the channel. These events are json form and parsed appropriately. Currently, message type = 1 is supported, but built to handle future types as well (events, methods, property sets, and more). 
   
-  The screen is drawn using the python `curses` library. As such, multi-line submissions are not permitted in the PoC. This can be addressed in extended submissions of the code.
-   
-  
 
 ### Future capabilities in progress include:
   * 1 on 1 user chat
@@ -31,8 +28,6 @@ QChat leverages event invokation to broadcast realtime messages across the chann
 ## Setup
 
 ### Dependencies
-
-Qchat only supports Linux Desktop systems.
 
 Qchat requires Python 2.7 or later and the tkinter GUI toolkit to be installed on the system. Python 3 is not currently supported.
 
