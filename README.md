@@ -1,5 +1,5 @@
 # OpenDXL-QChat
-QChat (Quick Chat) is a chat room service leveraging the OpenDXL event invokation capabilities to create small, light-weight, and interactive chat rooms for use by incident responders and SOC personnel.
+QChat (Quick Chat) is a chat room service for Linux Desktop systems leveraging the OpenDXL event invokation capabilities to create small, light-weight, and interactive chat rooms for use by incident responders and SOC personnel.
 
 ## Introduction
 
@@ -30,6 +30,42 @@ QChat leverages event invokation to broadcast realtime messages across the chann
 
 ## Setup
 
+### Dependencies
+
+Qchat only supports Linux Desktop systems.
+
+Qchat requires Python 2.7 or later and the tkinter GUI toolkit to be installed on the system. Python 3 is not currently supported.
+
+Install the required Python dependencies with the requirements.txt file:
+
+```sh
+$ pip install -r requirements.txt
+```
+
+This will install the dxlclient and appJar modules.
+
+
+#### Edit the dxlclient.config
+
+Provision DXL client certificates and fill in the broker list for the DXL Client.
+
+```
+[Certs]
+BrokerCertChain=certs/brokercert.crt
+CertFile=certs/client.crt
+PrivateKey=certs/client.key
+
+[Brokers]
+{}={};8883;
+```
+For more information on configuring the DXL client see the [OpenDXL Python Client SDK Documentation](https://opendxl.github.io/opendxl-client-python/pydoc/index.html)
+
+#### Run Qchat
+
+```sh
+$ python qchat.py
+```
+
 ### McAfee OpenDXL SDK
 
 https://www.mcafee.com/us/developers/open-dxl/index.aspx
@@ -41,16 +77,3 @@ https://github.com/opendxl/opendxl-tie-client-python/wiki
 * Certificate Files Creation [link](https://opendxl.github.io/opendxl-client-python/pydoc/certcreation.html)
 * ePO Certificate Authority (CA) Import [link](https://opendxl.github.io/opendxl-client-python/pydoc/epocaimport.html)
 * ePO Broker Certificates Export  [link](https://opendxl.github.io/opendxl-client-python/pydoc/epobrokercertsexport.html)
-
-
-
-#### Edit the dxlclient.config
-```
-[Certs]
-BrokerCertChain=certs/brokercert.crt
-CertFile=certs/client.crt
-PrivateKey=certs/client.key
-
-[Brokers]
-{}={};8883;
-```
